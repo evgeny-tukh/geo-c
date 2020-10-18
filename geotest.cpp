@@ -113,19 +113,28 @@ int main (int argCount, char *args []) {
             if (dest.lat > 1.0e3 || dest.lon > 1.0e3) die ("Destination point not specified");
 
             SGeoPoint org { origin.lat, origin.lon }, dst { dest.lat, dest.lon };
-            double rng, brg;
-
-            gkdCalcRhumblineDistAndBrg (1, & org, & dst, & rng, & brg);
-            gkdCalcRhumblineDistAndBrg2 (1, & org, & dst, & rng, & brg);
+            double rng, brg, endBrg;
 
             geo::Pos _origin { geo::valToRad (origin.lat), geo::valToRad (origin.lon )};
             geo::Pos _dest { geo::valToRad (dest.lat), geo::valToRad (dest.lon )};
 
-            bool result = rhumbline ? geo::calcRhumblineDistAndBrg (true, & _origin, & _dest, & range, & bearing) : false;
+            bool result;
+
+            if (rhumbline) {
+                gkdCalcRhumblineDistAndBrg (1, & org, & dst, & rng, & brg);
+                gkdCalcRhumblineDistAndBrg2 (1, & org, & dst, & rng, & brg);
+
+                result = geo::calcRhumblineDistAndBrg (true, & _origin, & _dest, & range, & bearing);
+            } else {
+                gkdCalcGreatCircleDistAndBrg (1, & org, & dst, & rng, & brg, & endBrg);
+
+                result = geo::calcGreatCircleDistAndBrg (true, & _origin, & _dest, & range, & bearing, & endBrg);
+            }
 
             if (result) {
                 geo::radToDeg (& bearing);
-                printf ("Leg from [%.6f; %.6f] to [%.6f; %.6f] is %.2fnm length; bearing is %.1fdeg\n", origin.lat, origin.lon, dest.lat, dest.lon, range, bearing);
+                printf ("%s leg from [%.6f; %.6f] to [%.6f; %.6f] is %.2fnm length; bearing is %.1fdeg\n",
+                        rhumbline ? "RL" : "GC", origin.lat, origin.lon, dest.lat, dest.lon, range, bearing);
                 printf ("MARIS GU gives %.2fnm length; bearing is %.1fdeg\n", rng, brg);
             } else {
                 printf ("Invalid data\n");
@@ -140,14 +149,25 @@ int main (int argCount, char *args []) {
             geo::Pos _origin { geo::valToRad (origin.lat), geo::valToRad (origin.lon )};            
             geo::Pos _dest;
             SGeoPoint org { origin.lat, origin.lon }, dst;            
-            double brg = geo::valToRad (bearing);
-            
-            gkdCalcRhumblinePos (1, & org, range, bearing, & dst);
+            double brg = geo::valToRad (bearing), endBrg;
 
-            if (geo::calcRhumblinePos (true, & _origin, range, brg, & _dest)) {
+            bool result;
+            
+            if (rhumbline) {
+                gkdCalcRhumblinePos (1, & org, range, bearing, & dst);
+
+                result = geo::calcRhumblinePos (true, & _origin, range, brg, & _dest);
+            } else {
+                gkdCalcGreatCirclePos (1, & org, range, bearing, & dst, & endBrg);
+
+                result = geo::calcGreatCirclePos (true, & _origin, range, brg, & _dest, & endBrg);
+            }
+
+            if (result) {
                 geo::ptToDeg (& _dest);
                 
-                printf ("Leg from [%.6f; %.6f] %.2f nm length to %.1fdeg ends at [%.6f; %.6f]\n", origin.lat, origin.lon, range, bearing, _dest.lat, _dest.lon);
+                printf ("%s leg from [%.6f; %.6f] %.2f nm length to %.1fdeg ends at [%.6f; %.6f]\n",
+                        rhumbline ? "RL" : "GC", origin.lat, origin.lon, range, bearing, _dest.lat, _dest.lon);
                 printf ("MARIS GU gives [%.6f; %.6f]\n", dst.lat, dst.lon);
             } else  {
                 printf ("Invalid data\n");

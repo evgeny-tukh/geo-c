@@ -158,7 +158,7 @@ bool calcRhumblineDistAndBrg2 (bool useWgs84, Pos *origin, Pos *dest, double *ra
 
         scaleCoef       = cos (middleLat) / sqrt (1.0 - tempValue * tempValue);
         scaledEquRadius = scaleCoef * WGS84_EQUAT_RAD_M / METERS_IN_NM;
-        deltaPhi        = deltaPhiInl (eccentricity, begLat, endLat);
+        deltaPhi        = deltaPhiInline (eccentricity, begLat, endLat);
 
         deltaEasting  = scaledEquRadius * (westLonDiff < eastLonDiff ? westLonDiff : eastLonDiff);
         deltaNorthing = scaledEquRadius * deltaPhi;

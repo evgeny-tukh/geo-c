@@ -1,0 +1,8 @@
+mgu/
+*.ilk
+*.dll
+*.exe
+*.lib
+*.pdb
+*.obj
+*.idb

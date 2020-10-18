@@ -8,6 +8,8 @@ namespace geo {
 
 bool calcRhumblinePos (bool useWgs84, Pos *origin, double range, double bearing, Pos *dest);
 bool calcRhumblineDistAndBrg (bool useWgs84, Pos *origin, Pos *dest, double *range, double *bearing);
+bool calcGreatCircleDistAndBrg (bool useWgs84, Pos *origin, Pos *dest, double *range, double *bearing, double *endBearing);
+bool calcGreatCirclePos (bool useWgs84, Pos *origin, double range, double bearing, Pos *dest, double *endBearing);
 
 inline double valToRad (double val) { return val * RAD_IN_DEG; }
 inline double valToDeg (double val) { return val / RAD_IN_DEG; }

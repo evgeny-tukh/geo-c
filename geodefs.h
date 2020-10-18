@@ -17,7 +17,7 @@ static const double MILES_IN_RAD = 3437.7467707849392526107818606515;
 static const double DEG_IN_MILE = 1.0 / 60.0;
 static const double MILES_IN_DEG = 60.0;
 static const double METERS_IN_NM = 1852.0;
-static const double MILES_IN_METER = 1.0 / METERS_IN_NM;
+static const double NM_IN_METER = 1.0 / METERS_IN_NM;
 
 static const double WGS84_EQUAT_RAD_M = 6378137.0;
 static const double WGS84_POLAR_RAD_M = 6356752.3142451793;
@@ -29,6 +29,10 @@ static const double TWO_PI = PI * 2.0;
 static const double HALF_PI = PI * 0.5;
 static const double HALF_OF_THREE_PI = PI * 1.5;
 static const double QUARTER_PI = PI * 0.25;
+static const double ONE_SIXTH_PI = PI / 6.0;
+
+static const double ONE_SIXTH = 1.0 / 6.0;
+static const double ONE_SIXTEENTH = 1.0 / 16.0;
 
 static const double STEP_RANGE = 10.0;
 
@@ -57,13 +61,13 @@ struct Pos {
 #ifdef _INTERNAL_
 namespace geo {
     inline bool checkLat (double lat, bool assumeRad = false) {
-        auto range = assumeRad ? 0.47222222222222222222222222222222 : 0.85;
+        auto range = assumeRad ? 1.3351768777756621263466234378938 : 85.0;
 
         return lat >= -range && lat <= range;
     }
 
     inline bool checkLon (double lat, bool assumeRad = false, bool strict = false) {
-        auto range = strict ? (assumeRad ? 1.0 : 180.0) : 1000.0;
+        auto range = strict ? (assumeRad ? PI : 180.0) : 1000.0;
 
         return lat >= -range && lat <= range;
     }
@@ -112,7 +116,7 @@ namespace geo {
         return sqrt (cat1 * cat1 + cat2 * cat2);
     }
 
-    inline double deltaPhiInl (double eccentricity, double begLat, double endLat)
+    inline double deltaPhiInline (double eccentricity, double begLat, double endLat)
     {
         double eSinBegLat = eccentricity * sin (begLat),
             eSinEndLat = eccentricity * sin (endLat);
@@ -163,5 +167,133 @@ namespace geo {
         return DEG_IN_RAD * (log (tan (QUARTER_PI + lat * 0.5)) - 0.5 * eccentricity * log ((1.0 + part) / (1.0 - part)));
     }
 
+    inline double calcLatEquationRoot (
+        double eccentricity,                  // Geoid eccentricity
+        double begLat,                        // Begin latitude
+        double dNorthing,                     // Mercator northing offset miles
+        double scaledEquRadius,               // a * k0
+        double precision
+    ) {
+        auto step = 0.001;
+        auto value = dNorthing / scaledEquRadius;
+
+        double begPhi, endPhi, midPhi, begValue, midValue, endValue;
+
+        // Search for interval range
+        begPhi   = begLat - step;
+        begValue = deltaPhiInline (eccentricity, begLat, begPhi);
+        endPhi   = begLat + step;
+        endValue = deltaPhiInline (eccentricity, begLat, endPhi);
+
+        if (endValue >= value && begValue <= value)
+        {
+            // Range is found - no some actions needed
+        }
+        else if (endValue <= value && begValue >= value)
+        {
+            // Range is found but must be exachanged
+            double gvTemp = begPhi;
+
+            begPhi = endPhi;
+            endPhi = gvTemp;
+        }
+        else if (endValue > begValue && endValue > value)
+        {
+            // Shift begPhi down until this is great than value
+            do
+            {
+                endPhi   = begPhi;
+                begPhi  -= step; 
+                endValue = begValue;
+                begValue = deltaPhiInline (eccentricity, begLat, begPhi);
+                step    += step;
+            }
+            while (begValue > value);
+        }
+        else
+        {
+            // Shift endPhi upper until this is less than value
+            do
+            {
+                begPhi   = endPhi;
+                endPhi  += step; 
+                begValue = endValue;
+                endValue = deltaPhiInline (eccentricity, begLat, endPhi);
+                step    += step;
+            }
+            while (endValue < value);
+        }
+
+        // Range are found - start linear interpolating...
+        do
+        {
+            midPhi   = begPhi + 
+                        (endPhi - begPhi) * (value - begValue) / (endValue - begValue);
+            midValue = deltaPhiInline (eccentricity, begLat, midPhi);
+
+            // Change range...
+            if (midValue >= value)
+            {
+                endPhi   = midPhi;
+                endValue = midValue;
+            }
+            else
+            {
+                begPhi   = midPhi;
+                begValue = midValue;
+            }
+        }
+        while (fabs (midValue - value) > precision);
+
+        return midPhi;
+    }
+
+    inline bool isSame (double val1, double val2, double precision = 1.0e-10) {
+        return fabs (val1 - val2) <= precision;
+    }
+
+    inline bool isNotSame (double val1, double val2, double precision = 1.0e-10) {
+        return fabs (val1 - val2) > precision;
+    }
+
+    inline void checkBearing (double *brg) {
+        while (*brg < 0.0) *brg += TWO_PI;
+        while (*brg > TWO_PI) *brg -= TWO_PI;
+    }
+
+    inline void reverseBearing (double *brg) {                                       \
+        if (*brg > PI) 
+            *brg -= PI;
+        else
+            *brg += PI;
+
+        normalizeAngle (brg);
+    }
+
+    inline bool isPole (Pos *point) {
+        return isPole (point->lat, true);
+    }
+
+    inline bool wrongLat (double lat) {
+        return lat < - HALF_PI || lat > HALF_PI;
+    }
+
+    inline bool wrongLong (double lon) {
+        return lon < -PI || lon > PI;
+    }
+
+    inline bool wrongAngle (double val) {
+        return val < 0.0 || val > TWO_PI;
+    }
+
+    inline bool wrongDistance (double dist) {
+        return dist < 0.0 || dist > WGS84_EQUAT_RAD_M * TWO_PI * NM_IN_METER;
+    }
+
+    inline bool checkBegPointCourseDist (double begLat, double begLon, double bearing, double range, bool enablePole) {
+        if (!checkGeoPointRange (begLat, begLon, true, enablePole)) return false;
+
+        return !wrongAngle (bearing) && !wrongDistance (range);
+    }
 }
 #endif
